@@ -1,0 +1,258 @@
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+def run_and_report(name, gate_sequence):
+    """gate_sequence: list of ('gate_name', qc_method) applied in order."""
+    # --- statevector circuit (no measurement, so the state survives) ---
+    qc_sv = QuantumCircuit(1)
+    for g in gate_sequence:
+        getattr(qc_sv, g)(0)
+    state = Statevector.from_instruction(qc_sv)
+
+    print(f"\n=== {name} ===")
+    print(qc_sv.draw(output="text"))
+    print("Final statevector:", state)
+    probs = state.probabilities_dict()
+    print(f"P(|0>) = {probs.get('0', 0.0):.4f}, P(|1>) = {probs.get('1', 0.0):.4f}")
+
+    # --- measurement circuit, 1024 shots ---
+    qc_meas = QuantumCircuit(1, 1)
+    for g in gate_sequence:
+        getattr(qc_meas, g)(0)
+    qc_meas.measure(0, 0)
+
+    sim = AerSimulator()
+    result = sim.run(qc_meas, shots=1024).result()
+    counts = result.get_counts()
+    print("Counts (1024 shots):", counts)
+
+    plot_histogram(counts, title=f"{name} — measurement counts")
+    plt.show()
+
+    return state, counts
+
+
+state_A, counts_A = run_and_report("Circuit A: H -> X -> Z", ["h", "x", "z"])
+state_B, counts_B = run_and_report("Circuit B: Z -> X -> H", ["z", "x", "h"])
+
+print("\n=== Comparison ===")
+print("State A:", state_A)
+print("State B:", state_B)
+print("Equal up to global phase:", state_A.equiv(state_B))
+
+
+qc_alt = QuantumCircuit(1)
+qc_alt.h(0)
+qc_alt.s(0)
+state_alt = Statevector.from_instruction(qc_alt)
+
+print("Original state:", state)
+print("Alternate state:", state_alt)
+print("Equivalent up to global phase:", state.equiv(state_alt))
+
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector, partial_trace
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+def run_two_qubit(name, build_fn):
+    qc_sv = QuantumCircuit(2)
+    build_fn(qc_sv)
+    state = Statevector.from_instruction(qc_sv)
+
+    print(f"\n=== {name} ===")
+    print(qc_sv.draw(output="text"))
+    print("Statevector:", state)
+
+    qc_meas = QuantumCircuit(2, 2)
+    build_fn(qc_meas)
+    qc_meas.measure([0, 1], [0, 1])
+
+    sim = AerSimulator()
+    counts = sim.run(qc_meas, shots=1024).result().get_counts()
+    print("Counts (1024 shots):", counts)
+    plot_histogram(counts, title=name)
+    plt.show()
+
+    return state, counts
+
+
+def circuit_A(qc):
+    qc.h(0)
+    qc.h(1)
+
+def circuit_B(qc):
+    qc.h(0)
+    qc.cx(0, 1)
+
+state_A, counts_A = run_two_qubit("Circuit A: H, H (independent)", circuit_A)
+state_B, counts_B = run_two_qubit("Circuit B: H -> CNOT (entangled)", circuit_B)
+
+from qiskit.quantum_info import DensityMatrix, partial_trace
+
+rho_A_q0 = partial_trace(DensityMatrix(state_A), [1])  # trace out qubit 1
+rho_B_q0 = partial_trace(DensityMatrix(state_B), [1])
+
+print("Circuit A, reduced state of q0:\n", rho_A_q0)
+print("Purity A:", rho_A_q0.purity())
+
+print("\nCircuit B, reduced state of q0:\n", rho_B_q0)
+print("Purity B:", rho_B_q0.purity())
+
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+# --- statevector circuit ---
+qc_sv = QuantumCircuit(2)
+qc_sv.x(1)
+qc_sv.h(0)
+qc_sv.cx(0, 1)
+state = Statevector.from_instruction(qc_sv)
+
+print(qc_sv.draw(output="text"))
+print("Statevector:", state)
+probs = state.probabilities_dict()
+print("Probabilities:", probs)
+
+# --- measurement circuit, 1024 shots ---
+qc_meas = QuantumCircuit(2, 2)
+qc_meas.x(1)
+qc_meas.h(0)
+qc_meas.cx(0, 1)
+qc_meas.measure([0, 1], [0, 1])
+
+sim = AerSimulator()
+counts = sim.run(qc_meas, shots=1024).result().get_counts()
+print("Counts (1024 shots):", counts)
+plot_histogram(counts, title="Bell state |Psi+>")
+plt.show()
+
+
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+def bell_state(name, prep_gates):
+    qc_sv = QuantumCircuit(2)
+    for q in prep_gates:
+        qc_sv.x(q)
+    qc_sv.h(0)
+    qc_sv.cx(0, 1)
+    state = Statevector.from_instruction(qc_sv)
+
+    print(f"\n=== {name} ===")
+    print(qc_sv.draw(output="text"))
+    print("Statevector:", state)
+    probs = state.probabilities_dict()
+    print("Probabilities:", probs)
+
+    qc_meas = QuantumCircuit(2, 2)
+    for q in prep_gates:
+        qc_meas.x(q)
+    qc_meas.h(0)
+    qc_meas.cx(0, 1)
+    qc_meas.measure([0, 1], [0, 1])
+
+    sim = AerSimulator()
+    counts = sim.run(qc_meas, shots=1024).result().get_counts()
+    print("Counts (1024 shots):", counts)
+    plot_histogram(counts, title=name)
+    plt.show()
+
+    return state, probs, counts
+
+results = {}
+results["Phi+"] = bell_state("Phi+", [])
+results["Phi-"] = bell_state("Phi-", [0])
+results["Psi+"] = bell_state("Psi+", [1])
+results["Psi-"] = bell_state("Psi-", [0, 1])
+
+#section 7
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector, DensityMatrix, partial_trace
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+def analyze_circuit(name, build_fn):
+    qc_sv = QuantumCircuit(2)
+    build_fn(qc_sv)
+    state = Statevector.from_instruction(qc_sv)
+
+    print(f"\n=== {name} ===")
+    print(qc_sv.draw(output="text"))
+    print("Statevector:", state)
+
+    qc_meas = QuantumCircuit(2, 2)
+    build_fn(qc_meas)
+    qc_meas.measure([0, 1], [0, 1])
+    sim = AerSimulator()
+    counts = sim.run(qc_meas, shots=1024).result().get_counts()
+    print("Counts (1024 shots):", counts)
+    plot_histogram(counts, title=name)
+    plt.show()
+
+    rho_q0 = partial_trace(DensityMatrix(state), [1])
+    purity = rho_q0.purity().real
+    verdict = "ENTANGLED" if abs(purity - 1.0) > 1e-6 else "SEPARABLE"
+    print(f"Purity of reduced state (q0): {purity:.4f} -> {verdict}")
+
+    return state, counts, purity
+
+
+def circuit_1(qc):  # H, CNOT
+    qc.h(0)
+    qc.cx(0, 1)
+
+def circuit_2(qc):  # H, H
+    qc.h(0)
+    qc.h(1)
+
+def circuit_3(qc):  # X, H, H, CNOT
+    qc.x(0)
+    qc.h(0)
+    qc.h(1)
+    qc.cx(0, 1)
+
+r1 = analyze_circuit("Circuit 1: H -> CNOT", circuit_1)
+r2 = analyze_circuit("Circuit 2: H, H", circuit_2)
+r3 = analyze_circuit("Circuit 3: X -> H -> H -> CNOT", circuit_3)
+
+"""
+#
+Q1. Single-qubit superposition vs. two-qubit entanglement
+
+A single-qubit superposition ($\alpha|0\rangle+\beta|1\rangle$) is fully described by that one qubit alone — nothing else needs to be specified. A two-qubit entangled state cannot be written as a tensor product of two independent single-qubit states; measuring one qubit instantaneously fixes the outcome distribution of the other, which has no single-qubit analog. Superposition is a property of one system; entanglement is a correlation between systems that can't be reduced to separate descriptions of each.
+
+Q2. Role of CNOT in creating a Bell state
+
+CNOT converts the classical-style correlation potential of superposition into genuine entanglement by making the target qubit's flip conditional on the control qubit's value. Applied to $\frac{1}{\sqrt2}(|0\rangle+|1\rangle)\otimes|0\rangle$, it maps the $|1\rangle_{control}$ branch to $|11\rangle$ while leaving the $|0\rangle_{control}$ branch as $|00\rangle$, producing $\frac{1}{\sqrt2}(|00\rangle+|11\rangle)$ — a state that no longer factors. Without the CNOT (or an equivalent two-qubit gate), H alone only ever produces separable states, as Circuit 2 in Section 6 showed.
+
+Q3. Why different states can share measurement probabilities
+
+Computational-basis measurement probability depends only on $|amplitude|^2$, discarding phase information. Two states differing by a relative phase — like $\Phi^+$ and $\Phi^-$ from Section 5 — have identical $|amplitude|^2$ on every basis state even though the underlying complex amplitudes differ. The phase is physically real (it's detectable in a different measurement basis, e.g. after applying H), it's just invisible to a measurement that only reads out along the computational basis.
+
+Q4. Statevector vs. measurement counts
+
+A statevector is the theoretical, exact quantum state — complex amplitudes, in principle infinite precision, obtained in Qiskit via Statevector.from_instruction() without ever measuring. Measurement counts are the outcome of actually collapsing the state via measure() and running finite shots on a simulator or real device; they're a statistical sample from the probability distribution the statevector implies, converging to it only as shots→∞. Every derivation you did in Sections 1–6 by hand predicts the statevector; the 1024-shot counts are there to confirm that prediction empirically, with sampling noise you'd expect to shrink as you increase shots.
+
+Q5. Computational basis states vs. qubit count
+Qubits	Basis states
+1	2
+2	4
+3	8
+5	32
+n	$2^n$
+
+Each qubit independently contributes a factor of 2 (it can be $|0\rangle$ or $|1\rangle$), and the full basis is the tensor product across all $n$ qubits, so the counts multiply rather than add: $2\times2\times\cdots\times2$ ($n$ times) $=2^n$. This exponential growth is the reason a statevector simulation of even 30–40 qubits is already computationally intractable on classical hardware, and it's the core resource argument behind claims of quantum advantage.
+
+"""
