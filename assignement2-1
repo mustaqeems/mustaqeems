@@ -1,0 +1,44 @@
+from qiskit import QuantumCircuit
+from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+def run_and_report(name, gate_sequence):
+    """gate_sequence: list of ('gate_name', qc_method) applied in order."""
+    # --- statevector circuit (no measurement, so the state survives) ---
+    qc_sv = QuantumCircuit(1)
+    for g in gate_sequence:
+        getattr(qc_sv, g)(0)
+    state = Statevector.from_instruction(qc_sv)
+
+    print(f"\n=== {name} ===")
+    print(qc_sv.draw(output="text"))
+    print("Final statevector:", state)
+    probs = state.probabilities_dict()
+    print(f"P(|0>) = {probs.get('0', 0.0):.4f}, P(|1>) = {probs.get('1', 0.0):.4f}")
+
+    # --- measurement circuit, 1024 shots ---
+    qc_meas = QuantumCircuit(1, 1)
+    for g in gate_sequence:
+        getattr(qc_meas, g)(0)
+    qc_meas.measure(0, 0)
+
+    sim = AerSimulator()
+    result = sim.run(qc_meas, shots=1024).result()
+    counts = result.get_counts()
+    print("Counts (1024 shots):", counts)
+
+    plot_histogram(counts, title=f"{name} — measurement counts")
+    plt.show()
+
+    return state, counts
+
+
+state_A, counts_A = run_and_report("Circuit A: H -> X -> Z", ["h", "x", "z"])
+state_B, counts_B = run_and_report("Circuit B: Z -> X -> H", ["z", "x", "h"])
+
+print("\n=== Comparison ===")
+print("State A:", state_A)
+print("State B:", state_B)
+print("Equal up to global phase:", state_A.equiv(state_B))
