@@ -1,0 +1,132 @@
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
+from qiskit.visualization import plot_histogram
+import matplotlib.pyplot as plt
+
+
+target = input("Enter a 3-bit target pattern (e.g., 101): ").strip()
+
+# Validate input
+if len(target) != 3 or any(bit not in "01" for bit in target):
+    raise ValueError("Target must be exactly 3 bits, containing only 0 and 1.")
+
+print("\nSearch Space:")
+patterns = [format(i, "03b") for i in range(8)]
+
+for pattern in patterns:
+    if pattern == target:
+        print(f"{pattern}  <-- TARGET")
+    else:
+        print(pattern)
+
+
+def create_oracle(target):
+
+    oracle = QuantumCircuit(3, name="Oracle")
+
+    # Convert target into the required X gates.
+    # If target bit is 0, apply X so that the target
+    # state is transformed to |111>.
+    for qubit, bit in enumerate(reversed(target)):
+        if bit == "0":
+            oracle.x(qubit)
+
+    # Apply controlled-controlled-Z.
+    oracle.h(2)
+    oracle.ccx(0, 1, 2)
+    oracle.h(2)
+
+    # Undo the X gates.
+    for qubit, bit in enumerate(reversed(target)):
+        if bit == "0":
+            oracle.x(qubit)
+
+    return oracle
+
+
+def diffusion_operator():
+    """
+    Creates the Grover diffusion operator.
+    """
+
+    diffusion = QuantumCircuit(3, name="Diffusion")
+
+    # H transforms computational basis to phase basis
+    diffusion.h(range(3))
+
+    # Transform |000> into |111>
+    diffusion.x(range(3))
+
+    # Multi-controlled Z
+    diffusion.h(2)
+    diffusion.ccx(0, 1, 2)
+    diffusion.h(2)
+
+    # Undo X and H
+    diffusion.x(range(3))
+    diffusion.h(range(3))
+
+    return diffusion
+
+
+
+qc = QuantumCircuit(3, 3)
+
+# Step 1: Create superposition
+qc.h(range(3))
+
+qc.barrier()
+
+# Step 2: Create dynamic oracle
+oracle = create_oracle(target)
+qc.compose(oracle, inplace=True)
+
+qc.barrier()
+
+# Step 3: Apply Grover diffusion
+diffusion = diffusion_operator()
+qc.compose(diffusion, inplace=True)
+
+qc.barrier()
+
+# Step 4: Measure
+qc.measure(range(3), range(3))
+
+
+print("\nQuantum Circuit:\n")
+print(qc.draw(output="text"))
+
+
+simulator = AerSimulator()
+
+compiled_circuit = transpile(qc, simulator)
+
+result = simulator.run(
+    compiled_circuit,
+    shots=1024
+).result()
+
+counts = result.get_counts()
+
+
+print("\nMeasurement Results:")
+print(counts)
+
+plot_histogram(counts)
+plt.title(f"Grover Search Result — Target: {target}")
+plt.show()
+
+
+identified_pattern = max(counts, key=counts.get)
+
+print("\n-----------------------------------")
+print("Quantum Search Result")
+print("-----------------------------------")
+print(f"Target Pattern    : {target}")
+print(f"Identified Pattern: {identified_pattern}")
+print(f"Occurrences       : {counts[identified_pattern]} / 1024")
+
+if identified_pattern == target:
+    print("SUCCESS: Target pattern identified!")
+else:
+    print("The target was not the most frequently measured state.")
