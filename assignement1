@@ -1,0 +1,80 @@
+
+import argparse
+from qiskit import QuantumCircuit
+from qiskit.quantum_info import Statevector
+from qiskit.visualization import plot_bloch_multivector
+import matplotlib.pyplot as plt
+
+GATES = {"X", "Y", "Z", "H", "RY"}
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Single-qubit gate explorer")
+    p.add_argument("--gate", choices=sorted(GATES), help="Gate to apply")
+    p.add_argument("--theta", type=float, help="Rotation angle in radians (RY only)")
+    return p.parse_args()
+
+
+def get_gate_choice(preselected):
+    if preselected:
+        return preselected
+    prompt = f"Choose a gate {sorted(GATES)}: "
+    while True:
+        choice = input(prompt).strip().upper()
+        if choice in GATES:
+            return choice
+        print(f"'{choice}' is not a valid gate. Pick one of {sorted(GATES)}.")
+
+
+def get_theta(preselected):
+    if preselected is not None:
+        return preselected
+    while True:
+        raw = input("Enter rotation angle theta in radians (e.g. 1.5708 for pi/2): ").strip()
+        try:
+            return float(raw)
+        except ValueError:
+            print("That's not a valid float. Try again.")
+
+
+def build_circuit(gate: str, theta: float | None) -> QuantumCircuit:
+    qc = QuantumCircuit(1)
+    if gate == "X":
+        qc.x(0)
+    elif gate == "Y":
+        qc.y(0)
+    elif gate == "Z":
+        qc.z(0)
+    elif gate == "H":
+        qc.h(0)
+    elif gate == "RY":
+        qc.ry(theta, 0)
+    return qc
+
+
+def main():
+    args = parse_args()
+    gate = get_gate_choice(args.gate)
+    theta = get_theta(args.theta) if gate == "RY" else None
+
+    qc = build_circuit(gate, theta)
+    state = Statevector.from_instruction(qc)
+
+    # 1. Display the resulting quantum circuit
+    print("\n--- Circuit ---")
+    print(qc.draw(output="text"))
+    qc.draw(output="mpl")
+    plt.show()
+
+    # Probabilities (not asked for here, kept for reference)
+    probs = state.probabilities_dict()
+    print(f"P(|0>) = {probs.get('0', 0.0):.4f}")
+    print(f"P(|1>) = {probs.get('1', 0.0):.4f}")
+
+    # 2. Display the Bloch sphere of the final state
+    plot_bloch_multivector(state)
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
